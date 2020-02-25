@@ -1,10 +1,11 @@
-from os import getcwd, listdir
+from os import getcwd, listdir, path
 from os.path import isdir, isfile, join
 from threading import Thread
 from time import sleep
 from typing import List
 
-import ffmpeg
+import pexpect
+from pexpect import popen_spawn
 
 # This list will contain the full paths of all the files that are found and
 # will be processed.
@@ -15,13 +16,141 @@ files = list()
 # example if `.png` is added as a supported extension)
 audio_files = ['wav', 'mp3']
 video_files = ['mp4', 'mkv']
-# Also, the lists do not contain `.flac` as a valid extension, this is done because converting
-# flac file back to flac is just a useless process for most of the files.
+# Also, these lists do not contain `flac` as a valid extension, why will anyone want
+# to generate a flac file from a flac file :p
 
 
 # The title of the directory that is to be ignored. Use a blank string as the value if no
 # directory is to be ignored.
 ignore_dir: str = '.ignore'
+
+
+def generate_flac_file(original_file: str) -> bool:
+    """
+        The main method that will generate the flac file and save it in the destination directory 
+        as required.
+
+        Remarks
+        --------
+        This function will simply take in the original file that is to be converted into a flac file,
+        use ffmpeg in the backend to generate a flac file with the same name as the original
+        file and subsequently save the file in the same directory as the original file.
+
+        Since this function handles the most important task of this script, this function also has the 
+        highest probability of an unexpected failure/crash.
+
+        *Realizes that deleting this method will leave bug-free code*
+
+        (╯°□°）╯︵ ┻━┻
+
+        Exceptions
+        -----------
+        OSError.FileNotFoundError: Thrown if the path supplied for the original file is invalid or if the 
+            path points to a directory instead of a file.
+
+        Parameters
+        -----------
+        original_file:
+            A string containing the full file path of the original file which is to be converted to
+            a flac file.
+
+        Returns
+        --------
+        True if the flac file was generated successfully, false in case of any error.
+
+        If any error occurs, the message will be printed directly to the screen by this method,
+        the part of returning the error message to the calling function is not required.
+    """
+
+    if not isfile(original_file):
+        raise FileNotFoundError(f'No file found at the path "{original_file}"')
+
+    # Getting the directory in which the original file is stored, creating a new
+    # path for the flac file using the location and the name of the original file
+    # and changing the extension of the original file.
+    directory, file_name = path.split(original_file)
+    flac_file = join(directory, file_name.rpartition('.')[0]) + '.flac'
+
+    # Firing a blank input at ffmpeg to get the number of frames present in the file.
+    # Doing this will result in a warning (since ffmpeg is not made to be used to get
+    # file info) -- `ffprobe` can be used as an alternative for this purpose, however
+    # not everyone will be willing to keep ffprobe just for this reason, so going with
+    # this hack-y approach to get the number of frames in the video.
+    info_command = f'ffmpeg.exe -i "{original_file}"'
+    thread = popen_spawn.PopenSpawn(info_command)
+
+    # Once the process finishes, getting the result from the command.
+    output = str(thread.read())
+
+    # Using string splitting over regex to get the frame count from the output.
+    # This way certainly seems a lot more readable to me than regex (¬_¬")
+    frame_count = int(output.split('NUMBER_OF_FRAMES-', 1)[-1]
+                      .split('\\r', 1)[0].strip().split(' ', 1)[-1].strip())
+    print('\n\nRESULT: \n', frame_count)
+
+    # Creating a string for all the arguments that will be used along with
+    # the ffmpeg base command.
+    command = f'ffmpeg.exe -i "{original_file.strip()}" -c:a flac "{flac_file.strip()}"'
+
+    # Creating a process that uses ffmpeg along the with the parameters to generate a
+    # flac file.
+    thread = popen_spawn.PopenSpawn(command)
+    frame_counter = thread.compile_pattern_list(
+        [pexpect.EOF, "frame= *\d+", "(.+)"])
+
+    frame_info = thread.compile_pattern_list([pexpect.EOF, "NUMBER_OF_FRAMES"])
+
+    while True:
+        result = thread.expect_list(frame_counter, timeout=10)
+        if result == 0:
+            print('The process exited.')
+            break
+        elif result == 1:
+            count = thread.match.group(0)
+            print(count)
+    print(thread.read())
+    print('Done')
+
+
+if __name__ == '__main__':
+    # A (fancy) welcome message, cos why not    ╮(╯▽╰)╭
+    welcome_message: str = \
+        """
+             ____  __     __    ___       ___  ____  __ _  ____  ____   __  ____  __  ____
+            (  __)(  )   / _\  / __)     / __)(  __)(  ( \(  __)(  _ \ / _\(_  _)/  \(  _ \\
+             ) _) / (_/\/    \( (__     ( (_ \ ) _) /    / ) _)  )   //    \ )( (  O ))   /
+            (__)  \____/\_/\_/ \___)     \___/(____)\_)__)(____)(__\_)\_/\_/(__) \__/(__\_)
+        """
+    print(welcome_message)
+
+    # Emptying the list as an edge-case precaution
+    files = []
+
+    print(f'\nCurrent root directory is `{getcwd()}`')
+
+    while True:
+        # Getting the path of the root directory from the user. This loop will be broken
+        # only when the the user provides a valid input for the root directory.
+        root = input('Hit enter to continue, or enter the full path of any directory ' +
+                     'that you wish to use as the root directory: ').strip()
+
+        if len(root) == 0:
+            root = getcwd()
+
+        if not isdir(root):
+            print(f'\nEntered path `{root}` does not belong to a directory.')
+        else:
+            print(f'\n\nUsing {root} as the root directory.')
+            break
+
+    # Getting a list of all the files that are present inside the root directory.
+    # This function will populate `files` which is a list of strings with each
+    # string being the full path of a file found inside the root directory.
+    get_file_list(root)
+
+    # Displaying a nice little disappearing animation while waiting for user input
+    # before killing the script.
+    animated_exit()
 
 
 def get_file_list(root: str, mode: str = 'recursive') -> None:
@@ -32,7 +161,6 @@ def get_file_list(root: str, mode: str = 'recursive') -> None:
 
         Parameters
         -----------
-
         root:
             A string containing the directory that is to be used as the root where
             the files are to be searched in\n
@@ -128,40 +256,3 @@ def animated_exit() -> None:
         # killing the script.
         if not thread.isAlive():
             exit(0)
-
-
-if __name__ == '__main__':
-
-    # A welcome message, cos why not    ╮(╯▽╰)╭
-    welcome_message: str = \
-        """
-             ____  __     __    ___       ___  ____  __ _  ____  ____   __  ____  __  ____
-            (  __)(  )   / _\  / __)     / __)(  __)(  ( \(  __)(  _ \ / _\(_  _)/  \(  _ \\
-             ) _) / (_/\/    \( (__     ( (_ \ ) _) /    / ) _)  )   //    \ )( (  O ))   /
-            (__)  \____/\_/\_/ \___)     \___/(____)\_)__)(____)(__\_)\_/\_/(__) \__/(__\_)
-        """
-    print(welcome_message)
-
-    # Emptying the list as an edge-case precaution
-    files = []
-
-    print(f'\nCurrent root directory is `{getcwd()}`')
-
-    while True:
-        # Getting the path of the root directory from the user. This loop will be broken
-        # only when the the user provides a valid input for the root directory.
-        root = input('Hit enter to continue, or enter the full path of any directory ' +
-                     'that you wish to use as the root directory: ').strip()
-
-        if len(root) == 0:
-            root = getcwd()
-
-        if not isdir(root):
-            print(f'\nEntered path `{root}` does not belong to a directory.')
-        else:
-            print(f'\n\nUsing {root} as the root directory.')
-            break
-
-    # Displaying a nice little disappearing animation while waiting for user input
-    # before killing the script.
-    animated_exit()
