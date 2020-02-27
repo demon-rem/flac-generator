@@ -1,7 +1,7 @@
 from os import getcwd, listdir, path
 from os.path import isdir, isfile, join
 from threading import Thread
-from time import sleep
+from time import sleep, time
 from typing import List
 
 import pexpect
@@ -25,7 +25,7 @@ video_files = ['mp4', 'mkv']
 ignore_dir: str = '.ignore'
 
 
-def generate_flac_file(original_file: str) -> bool:
+def generate_flac_file(original_file: str, *, force_write: False) -> bool:
     """
         The main method that will generate the flac file and save it in the destination directory 
         as required.
@@ -52,7 +52,10 @@ def generate_flac_file(original_file: str) -> bool:
         -----------
         original_file:
             A string containing the full file path of the original file which is to be converted to
-            a flac file.
+            a flac file\n
+        force_write:
+            Boolean indicating if the file is already existing, should it be overwritten or not.
+            Default --> false.
 
         Returns
         --------
@@ -92,6 +95,13 @@ def generate_flac_file(original_file: str) -> bool:
     # the ffmpeg base command.
     command = f'ffmpeg.exe -i "{original_file.strip()}" -c:a flac "{flac_file.strip()}"'
 
+    if force_write:
+        # If existing files are to be overwritten, appending '-y' to ffmpeg command. This will
+        # be used if a clash occurs (i.e. a file with the same name as `flac_file` already exists).
+        command += ' -y'
+
+    # Getting the start time before firing the process.
+
     # Creating a process that uses ffmpeg along the with the parameters to generate a
     # flac file.
     thread = popen_spawn.PopenSpawn(command)
@@ -103,9 +113,10 @@ def generate_flac_file(original_file: str) -> bool:
     while True:
         result = thread.expect_list(frame_counter, timeout=10)
         if result == 0:
-            print('The process exited.')
+            # Reaches here only when the process has ended. Breaking out of the loop.
             break
         elif result == 1:
+            # Getting the total number of frames processed.
             count = thread.match.group(0)
             print(count)
     print(thread.read())
@@ -147,6 +158,21 @@ if __name__ == '__main__':
     # This function will populate `files` which is a list of strings with each
     # string being the full path of a file found inside the root directory.
     get_file_list(root)
+
+    print(f'Found {len(files)} files in the directory.')
+
+    # Asking if conflicting files are to be overwritten or not.
+    choice: bool = None
+    while True:
+        choice = str(input('Force overwrite any file(s) in case of a conflict (yes/no)? '
+                           'Warning; This could result in a loss of data: ').strip()).lower()
+
+        if choice in ['true', 'yes']:
+            choice = True
+            break
+        elif choice in ['false', 'no']:
+            choice = False
+            break
 
     # Displaying a nice little disappearing animation while waiting for user input
     # before killing the script.
