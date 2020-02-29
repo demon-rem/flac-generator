@@ -1,9 +1,9 @@
 from os import getcwd, listdir, path
 from os.path import isdir, isfile, join
+from re import search
 from threading import Thread
 from time import sleep, time
-from typing import List
-from re import search
+from typing import List, Tuple
 
 import pexpect
 from pexpect import popen_spawn
@@ -251,7 +251,7 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
           f'Remaining: {print_time(eta)}', sep='\t ', end='\t\t\t\r')
 
 
-def generate_flac_file(original_file: str, *, force_write: bool = False) -> bool:
+def generate_flac_file(original_file: str, *, force_write: bool = False) -> Tuple[bool, str]:
     """
         The main method that will generate the flac file and save it in the destination directory
         as required.
@@ -285,10 +285,14 @@ def generate_flac_file(original_file: str, *, force_write: bool = False) -> bool
 
         Returns
         --------
-        True if the flac file was generated successfully, false in case of any error.
+        A tuple containing a boolean and a string. The value of the boolean is true if the flac 
+        file is generated successfully, false in case of any error.
 
         If any error occurs, the message will be printed directly to the screen by this method,
         the part of returning the error message to the calling function is not required.
+
+        If the value of the boolean is true, the string will contain the full path of the flac 
+        file generated. In case if the value of the boolean is false, the string will be empty.
     """
 
     if not isfile(original_file):
@@ -348,7 +352,7 @@ def generate_flac_file(original_file: str, *, force_write: bool = False) -> bool
             animated_progress(int(count), frame_count,
                               int(time()) - start_time)
 
-    return True
+    return (True, flac_file)
 
 
 if __name__ == '__main__':
@@ -408,6 +412,14 @@ if __name__ == '__main__':
         elif choice in ['false', 'no']:
             choice = False
             break
+
+    for i in range(len(files)):
+        print(
+            f'\n({i+1}/{len(files)}) Processing file: {path.basename(files[i])}')
+
+        result, file = generate_flac_file(files[i], force_write=choice)
+        if result:
+            print(f'Generated file "{file}" successfully')
 
     # Displaying a nice little disappearing animation while waiting for user input
     # before killing the script.
