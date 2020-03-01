@@ -8,10 +8,6 @@ from typing import List, Tuple
 import pexpect
 from pexpect import popen_spawn
 
-# This list will contain the full paths of all the files that are found and
-# will be processed.
-files = list()
-
 # Lists containing the file extensions of the files that will be supported by this script.
 # Extensions can be added or removed as required, but doing so may cause errors (for
 # example if `.png` is added as a supported extension)
@@ -20,16 +16,24 @@ video_files = ['mp4', 'mkv']
 # Also, these lists do not contain `flac` as a valid extension, why will anyone want
 # to generate a flac file from a flac file :p
 
-
 # The title of the directory that is to be ignored. Use a blank string as the value if no
 # directory is to be ignored.
 ignore_dir: str = '.ignore'
 
 # The total number of progress bars (hashes by default) present in the progress bar.
-progress_bar_count: int = 30
+progress_bar_count: int = 8
 
 # The symbol that is used to generate the progress bar. Max length of 4 characters.
-symbol: str = '#'
+# Warning: Setting this symbol to be anything other than a blank string will replace
+# the original progress bar with this symbol.
+symbol: str = ''
+
+# This list will contain the full paths of all the files that are found and
+# will be processed.
+files = list()
+
+# A list consisting of various stages of the incomplete progress bar as a string.
+BAR_INCOMPLETE = ['▏', '▎', '▍', '▌', '▋', '▊', '▉']
 
 
 def get_file_list(root: str, mode: str = 'recursive') -> None:
@@ -208,34 +212,40 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
             Should be less than or equal to `total_frames` and greater than or equal to zero\n
         total_frames:
             An integer containing the total number of frames. Will be used to calculate the current
-            progress and the estimated time remaining\n
+            progress and the estimated time remaining. If the frame count couldn't be fetched from 
+            ffmpeg, the value of this variable will be a boolean\n
         time_elapsed:
             An integer containing the count of seconds elapsed before reaching this frame since the
             processing of the current file started, should be a positive integer. Used to calculate ETA\n
 
         Exceptions
         -----------
-        TypeError: Thrown if any of the variables is not an integer\n
-        ValueError: Thrown if any of the arguments is less than zero, or is `total_frames` is
-            zero, or if value of `frame_count` is greater than the value of `total_frames`\n
+        TypeError: Thrown if any of the variables is not an integer (except `total_frames`)\n
+        ValueError: Thrown if any of the arguments is less than zero, or if value of `frame_count`
+            is greater than the value of `total_frames`\n
     """
 
-    if not isinstance(frame_count, int) or not isinstance(total_frames, int) or \
-            not isinstance(time_elapsed, int):
+    if not isinstance(frame_count, int) or not isinstance(time_elapsed, int):
         raise Exception.TypeError('Non-integer argument supplied.')
     elif frame_count < 0:
         raise ValueError(f'Frame count [{frame_count}] can\'t be negative')
-    elif total_frames <= 0:
+    elif not isinstance(total_frames, bool) and total_frames <= 0:
         raise ValueError(f'Total frames [{total_frames}] too less.')
-    elif frame_count > total_frames:
-        raise ValueError(f'Current frame count [{frame_count}] cannot be greater '
-                         'than total frame count [{total_frames}]')
+        if frame_count > total_frames:
+            # Ensuring that the current frame count isn't larger than the total count.
+            raise ValueError(f'Current frame count [{frame_count}] cannot be greater '
+                             'than total frame count [{total_frames}]')
+
     elif time_elapsed < 0:
         raise ValueError(f'Time elapsed [{time_elapsed}] can\'t be negative')
+    elif not isinstance(total_frames, int) and not isinstance(total_frames, bool):
+        # Throwing this error only if `frame_count` is neither an integer nor a boolean.
+        raise ValueError(f'Unexpected value in total frames: {total_frames}')
 
-    # The progress will be shown with a progress bar, each 'hash' symbol in the bar representing a fixed
-    # percentage of progress.
-    percentage: float = round(float(frame_count/total_frames) * 100, 3)
+    if not isinstance(total_frames, bool):
+        # The progress will be shown with a progress bar, each symbol in the bar representing a fixed
+        # percentage of progress.
+        percentage: float = round(float(frame_count/total_frames) * 100, 3)
 
     # Calculating the number of seconds remaining to complete. Calculating this as the number of frames
     # being processed in a single second, divided by the total number of frames.
@@ -246,9 +256,39 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
     # to get the time remaining.
     eta = eta - time_elapsed
 
-    hashes: int = int(percentage * progress_bar_count / 100)
-    print(f'\t{percentage}%', (symbol * hashes) + (' ' * (progress_bar_count - hashes)),
-          f'Remaining: {print_time(eta)}', sep='\t ', end='\t\t\t\r')
+    progress: str = ''
+
+    animated_progress.bar_size = (100 / progress_bar_count)
+
+    # Note: At the end of the following block of code, the value inside `percentage` will be a string.
+    if len(symbol) != 0 and not isinstance(total_frames, bool):
+        # If the string containing the symbol is not empty, generating a progress bar using the symbol.
+        hashes: int = int(percentage / animated_progress.bar_size)
+        progress = (symbol * hashes) + (' ' * (progress_bar_count - hashes))
+        percentage = f'{percentage}%'
+    elif not isinstance(total_frames, bool):
+        # If no symbol is set, using the block-y progress bar.
+        completed: int = int(percentage / animated_progress.bar_size)
+        progress = '█' * completed
+        incomplete: int = int(
+            (percentage % animated_progress.bar_size)/len(BAR_INCOMPLETE))
+        progress += BAR_INCOMPLETE[incomplete]
+        progress += (progress_bar_count - (completed)) * ' '
+        percentage = f'{percentage}%'
+    else:
+        # The flow of control will reach this part only when the total frame count is unknown.
+        # Simply replacing the percentage with the current frame count.
+        percentage = f'Frames: {frame_count}'
+
+    # Printing what is available in the progress bar. If the total frame count is not available
+    # then neither will be the current percentage, and so the progress also can't be displayed.
+    print(
+        f'\r\t{percentage}',
+        progress if not isinstance(total_frames, bool) else '',
+        'Remaining: {0}'.format(print_time(eta) if not isinstance(
+            total_frames, bool) else "¯\\_(ツ)_/¯"),
+        sep='\t', end='\t'
+    )
 
 
 def generate_flac_file(original_file: str, *, force_write: bool = False) -> Tuple[bool, str]:
@@ -315,10 +355,17 @@ def generate_flac_file(original_file: str, *, force_write: bool = False) -> Tupl
     # Once the process finishes, getting the result from the command.
     output = str(thread.read())
 
-    # Using string splitting over regex to get the frame count from the output.
-    # This way certainly seems a lot more readable to me than regex (¬_¬")
-    frame_count = int(output.split('NUMBER_OF_FRAMES-', 1)[-1]
-                      .split('\\r', 1)[0].strip().split(' ', 1)[-1].strip())
+    frame_count: int = 0
+    try:
+        # Using string splitting over regex to get the frame count from the output.
+        # This way certainly seems a lot more readable to me than regex (¬_¬")
+        frame_count = int(output.split('NUMBER_OF_FRAMES-', 1)[-1]
+                          .split('\\r', 1)[0].strip().split(' ', 1)[-1].strip())
+    except Exception as e:
+        # If the dialog does not contain the frame counts, the flow-of-control will end here.
+        # Setting `frame_count` to be false as a flag. Will be used to know that the frame
+        # length of the file could not be detected.
+        frame_count = False
 
     # Creating a string for all the arguments that will be used along with
     # the ffmpeg base command.
@@ -419,7 +466,7 @@ if __name__ == '__main__':
 
         result, file = generate_flac_file(files[i], force_write=choice)
         if result:
-            print(f'Generated file "{file}" successfully')
+            print(f'\n\tGenerated file "{file}" successfully')
 
     # Displaying a nice little disappearing animation while waiting for user input
     # before killing the script.
