@@ -1,10 +1,10 @@
+from math import ceil
 from os import getcwd, listdir, path
 from os.path import isdir, isfile, join
 from re import search
 from threading import Thread
 from time import sleep, time
 from typing import List, Tuple
-from math import ceil
 
 import pexpect
 from pexpect import popen_spawn
@@ -12,7 +12,7 @@ from pexpect import popen_spawn
 # Lists containing the file extensions of the files that will be supported by this script.
 # Extensions can be added or removed as required, but doing so may cause errors (for
 # example if `.png` is added as a supported extension)
-audio_files = ['wav', 'mp3']
+audio_files = ['wav', 'mp3', 'm4a']
 video_files = ['mp4', 'mkv']
 # Also, these lists do not contain `flac` as a valid extension, why will anyone want
 # to generate a flac file from a flac file :p
@@ -118,7 +118,11 @@ def animated_exit() -> None:
     # lost in a sea of text.
     print('\n\n\n')
 
+    # This boolean will be used to ensure that a parallel thread asking for user input is
+    # executed only once in the infinite loop below. Without this check, a new thread will
+    # be created in every iteration of the loop.
     take_input: bool = False
+
     thread: Thread = None
     while True:
         message: str = 'Enter any input to exit'
@@ -141,13 +145,13 @@ def animated_exit() -> None:
 
 def print_time(seconds: int) -> str:
     """
-        Converts a given number of seconds into a human-understandable format and return the result
+        Converts a given number of seconds into a human-readable format and returns the result
         as a string.
 
         Parameters
         -----------
         seconds:
-            An integer containing the amount of seconds. Should be an integer greater than zero\n
+            An integer containing the amount of seconds. Should be a positive whole number\n
 
         Exceptions
         -----------
@@ -168,9 +172,9 @@ def print_time(seconds: int) -> str:
         # Hardcoded solution to handle cases where the time remaining is 0 seconds.
         return '0 seconds'
 
-    # The list contains strings that will be used as units of time in reversed order.
+    # This list contains strings that will be used as units of time in reversed order.
     # This is an ugly-hack to use `static` variables inside a method directly.
-    # The values will be initialized only once when the function is run first time.
+    # The values will be initialized only once when this function is run for first time.
     # And this, in turn will improve the performace (negligibly).
     print_time.units: List[str] = [
         'weeks',
@@ -180,9 +184,8 @@ def print_time(seconds: int) -> str:
         'seconds'
     ]
 
-    # Creating list to store amount of time. Attaching the list to the method
-    # object, this way these values won't be calculated every time this method
-    # is called (saving some processing power).
+    # A list to store amount(s) of time. Attaching the list to the method object, this way these
+    # values won't be calculated every time this method is called (saving some processing power).
     print_time.time_units: List[int] = [
         60 * 60 * 24 * 7,   # Weeks
         60 * 60 * 24,       # Days
@@ -190,6 +193,10 @@ def print_time(seconds: int) -> str:
         60,                 # Minutes
         1                   # Seconds
     ]
+
+    # Ensure that the values in `print_time.units` and `print_time.time_units` are in the same order.
+    # That is, at the same index, both the list contain values for the same time units. For example,
+    # at index 0 both list contain values for seconds.
 
     result: str = ''
     index: int = 0
@@ -204,9 +211,9 @@ def print_time(seconds: int) -> str:
     return result.strip()
 
 
-def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) -> None:
+def animated_progress(frame_count: int, total_frames: any, time_elapsed: int) -> None:
     """
-        Prints a progress bar to the screen.
+        Prints a progress bar to the screen with (hopefully) relevant data.
 
         Parameters
         -----------
@@ -216,35 +223,45 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
         total_frames:
             An integer containing the total number of frames. Will be used to calculate the current
             progress and the estimated time remaining. If the frame count couldn't be fetched from 
-            ffmpeg, the value of this variable will be a boolean\n
+            ffmpeg, the value of this variable should be a boolean (false preferrably)\n
         time_elapsed:
             An integer containing the count of seconds elapsed before reaching this frame since the
             processing of the current file started, should be a positive integer. Used to calculate ETA\n
 
         Exceptions
         -----------
-        TypeError: Thrown if any of the variables is not an integer (except `total_frames`)\n
+        TypeError: Thrown if `total_frames` is neither an integer nor a boolean, or if the remaining
+            arguments are not integers.\n
         ValueError: Thrown if any of the arguments is less than zero, or if value of `frame_count`
             is greater than the value of `total_frames`\n
     """
+
+    # Note: While checking if the value of `total_frames` is a boolean or an integer,
+    # do NOT use `isinstance(total_frames, int)`, booleans can be implicitly converted into
+    # integers, and so the above check will always return true. The reverse is not true,
+    # i.e. if `total_frames` contains an integer, `isinstance(total_frames, bool)` will not
+    # be true. The latter is used to check for the value of `total_frames` in this section.
 
     if not isinstance(frame_count, int) or not isinstance(time_elapsed, int):
         raise Exception.TypeError('Non-integer argument supplied.')
     elif frame_count < 0:
         raise ValueError(f'Frame count [{frame_count}] can\'t be negative')
     elif not isinstance(total_frames, bool) and total_frames <= 0:
+        # If `total_frames` is an integer and contains a value of less than or equal to 0,
+        # throwing an error.
         raise ValueError(f'Total frames [{total_frames}] too less.')
+
         if frame_count > total_frames:
             # Ensuring that the current frame count isn't larger than the total count.
             raise ValueError(f'Current frame count [{frame_count}] cannot be greater '
                              'than total frame count [{total_frames}]')
-
     elif time_elapsed < 0:
         raise ValueError(f'Time elapsed [{time_elapsed}] can\'t be negative')
     elif not isinstance(total_frames, int) and not isinstance(total_frames, bool):
         # Throwing this error only if `frame_count` is neither an integer nor a boolean.
         raise ValueError(f'Unexpected value in total frames: {total_frames}')
 
+    percentage: flat = 0.0
     if not isinstance(total_frames, bool):
         # The progress will be shown with a progress bar, each symbol in the bar representing a fixed
         # percentage of progress.
@@ -263,7 +280,7 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
 
     progress: str = ''
 
-    animated_progress.bar_size = (100 / progress_bar_count)
+    animated_progress.bar_size: float = float(100 / progress_bar_count)
 
     # Note: At the end of the following block of code, the value inside `percentage` will be a string.
     if not isinstance(total_frames, bool):
@@ -464,7 +481,10 @@ if __name__ == '__main__':
 
     # Asking if conflicting files are to be overwritten or not.
     choice: bool = None
-    while True:
+    while len(files) > 0:
+        # Infinite loop as long as files are found in the root directory. Will be breaking out of this
+        # loop only when the user selects one of the available options. The check for the while loop is
+        # to ensure that the user isn't asked to choose when no file could be found in the root directory.
         choice = str(input('Force overwrite any file(s) in case of a conflict (yes/no)? '
                            'Warning; This could result in a loss of data: ').strip()).lower()
 
