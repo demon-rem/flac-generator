@@ -4,6 +4,7 @@ from re import search
 from threading import Thread
 from time import sleep, time
 from typing import List, Tuple
+from math import ceil
 
 import pexpect
 from pexpect import popen_spawn
@@ -21,7 +22,7 @@ video_files = ['mp4', 'mkv']
 ignore_dir: str = '.ignore'
 
 # The total number of progress bars (hashes by default) present in the progress bar.
-progress_bar_count: int = 8
+progress_bar_count: int = 20
 
 # The symbol that is used to generate the progress bar. Max length of 4 characters.
 # Warning: Setting this symbol to be anything other than a blank string will replace
@@ -31,9 +32,6 @@ symbol: str = ''
 # This list will contain the full paths of all the files that are found and
 # will be processed.
 files = list()
-
-# A list consisting of various stages of the incomplete progress bar as a string.
-BAR_INCOMPLETE = ['▏', '▎', '▍', '▌', '▋', '▊', '▉']
 
 
 def get_file_list(root: str, mode: str = 'recursive') -> None:
@@ -166,8 +164,15 @@ def print_time(seconds: int) -> str:
     elif seconds < 0:
         raise ValueError(f'Value of `seconds` too low [{seconds}]')
 
+    if seconds == 0:
+        # Hardcoded solution to handle cases where the time remaining is 0 seconds.
+        return '0 seconds'
+
     # The list contains strings that will be used as units of time in reversed order.
-    units: List[str] = [
+    # This is an ugly-hack to use `static` variables inside a method directly.
+    # The values will be initialized only once when the function is run first time.
+    # And this, in turn will improve the performace (negligibly).
+    print_time.units: List[str] = [
         'weeks',
         'days',
         'hours',
@@ -177,9 +182,7 @@ def print_time(seconds: int) -> str:
 
     # Creating list to store amount of time. Attaching the list to the method
     # object, this way these values won't be calculated every time this method
-    # is called (saving some processing power). This is an ugly-hack to use
-    # `static` variables inside a method directly. The values will be calculated
-    # only once when the function is run first time.
+    # is called (saving some processing power).
     print_time.time_units: List[int] = [
         60 * 60 * 24 * 7,   # Weeks
         60 * 60 * 24,       # Days
@@ -191,10 +194,10 @@ def print_time(seconds: int) -> str:
     result: str = ''
     index: int = 0
 
-    while (min([len(print_time.time_units), len(units)]) > index):
+    while (min([len(print_time.time_units), len(print_time.units)]) > index):
         if seconds >= print_time.time_units[index]:
             cal = int(seconds / print_time.time_units[index])
-            result += str(cal) + ' ' + units[index] + ' '
+            result += str(cal) + ' ' + print_time.units[index] + ' '
             seconds %= print_time.time_units[index]
         index += 1
 
@@ -245,11 +248,13 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
     if not isinstance(total_frames, bool):
         # The progress will be shown with a progress bar, each symbol in the bar representing a fixed
         # percentage of progress.
-        percentage: float = round(float(frame_count/total_frames) * 100, 3)
+        percentage: float = round(float(frame_count/total_frames) * 100, 2)
 
     # Calculating the number of seconds remaining to complete. Calculating this as the number of frames
     # being processed in a single second, divided by the total number of frames.
-    eta: int = int(total_frames / float(frame_count / time_elapsed))
+    eta = 0
+    if time_elapsed > 0:
+        eta: int = int(total_frames / float(frame_count / time_elapsed))
 
     # The value of `eta` right now is the amount of seconds required to process the entire file
     # from beginning. But, a certain amount of time has already elapsed. Removing that time
@@ -261,20 +266,29 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
     animated_progress.bar_size = (100 / progress_bar_count)
 
     # Note: At the end of the following block of code, the value inside `percentage` will be a string.
-    if len(symbol) != 0 and not isinstance(total_frames, bool):
-        # If the string containing the symbol is not empty, generating a progress bar using the symbol.
-        hashes: int = int(percentage / animated_progress.bar_size)
-        progress = (symbol * hashes) + (' ' * (progress_bar_count - hashes))
-        percentage = f'{percentage}%'
-    elif not isinstance(total_frames, bool):
-        # If no symbol is set, using the block-y progress bar.
-        completed: int = int(percentage / animated_progress.bar_size)
-        progress = '█' * completed
-        incomplete: int = int(
-            (percentage % animated_progress.bar_size)/len(BAR_INCOMPLETE))
-        progress += BAR_INCOMPLETE[incomplete]
-        progress += (progress_bar_count - (completed)) * ' '
-        percentage = f'{percentage}%'
+    if not isinstance(total_frames, bool):
+        if len(symbol) != 0:
+            # If the string containing the symbol is not empty, generating a progress bar using the symbol.
+            hashes: int = int(percentage / animated_progress.bar_size)
+            progress = (symbol * hashes) + \
+                (' ' * (progress_bar_count - hashes))
+        else:
+            # If no symbol is set, using the block-y progress bar.
+            completed: int = ceil(percentage / animated_progress.bar_size)
+            progress = '█' * completed
+            progress += ((progress_bar_count - completed) * ' ')
+
+        # If the last digit after decimal in `percentage` is zero, it'll be ignored (since its a float)
+        # this will result in a changing length of the percentage which will cause problems since the
+        # previous message will be overwritten. If the length of the new message is not the same, it'll make
+        # the output messy. Handling that by ensuring that the float number consists of a length of at least
+        # 4 (including the dot), and 2 numbers after the decimal.
+        percentage = '%04.02f' % percentage
+
+        # Adding percentage symbol to the string and justifying the string to be of length '7' since the
+        # largest value allowed inside the string will be '100.00%', so following the same logic as above,
+        # except padding it with spaces on the left.
+        percentage = (str(percentage) + '%').rjust(7)
     else:
         # The flow of control will reach this part only when the total frame count is unknown.
         # Simply replacing the percentage with the current frame count.
@@ -287,7 +301,8 @@ def animated_progress(frame_count: int, total_frames: int, time_elapsed: int) ->
         progress if not isinstance(total_frames, bool) else '',
         'Remaining: {0}'.format(print_time(eta) if not isinstance(
             total_frames, bool) else "¯\\_(ツ)_/¯"),
-        sep='\t', end='\t'
+        sep=' ' * 4,
+        end=' '
     )
 
 
@@ -436,7 +451,7 @@ if __name__ == '__main__':
         if not isdir(root):
             print(f'\nEntered path `{root}` does not belong to a directory.')
         else:
-            print(f'\n\nUsing {root} as the root directory.')
+            print(f'\n\nUsing "{root}" as the root directory.')
             break
 
     # Getting a list of all the files that are present inside the root directory.
@@ -466,6 +481,11 @@ if __name__ == '__main__':
 
         result, file = generate_flac_file(files[i], force_write=choice)
         if result:
+            # Once the flac file is created successfully, replacing the original progress bar
+            # with a completely filled progress bar and the time remaining as zero seconds.
+            animated_progress(100, 100, 0)
+
+            # Finally printing the success message.
             print(f'\n\tGenerated file "{file}" successfully')
 
     # Displaying a nice little disappearing animation while waiting for user input
