@@ -389,10 +389,12 @@ def generate_flac_file(original_file: str, *, force_write: bool = False) -> Tupl
 
     frame_count: int = 0
     try:
-        # Using string splitting over regex to get the frame count from the output.
-        # This way certainly seems a lot more readable to me than regex (¬_¬")
-        frame_count = int(output.split('NUMBER_OF_FRAMES-', 1)[-1]
-                          .split('\\r', 1)[0].strip().split(' ', 1)[-1].strip())
+        output = output.replace('\\r', '').replace('\\n', '')
+        # Finally using regex to get the main string that should contain the total count for
+        # number of frames, then again using regex to extract just the numbers out of the first
+        # string, and finally converting the numbers into integer.
+        frame_count = int(search('[0-9]+', search(r'NUMBER_OF_FRAMES-[a-zA-Z]+:(\s*)[0-9]+', output)
+                                 .group()).group().strip())
     except Exception as e:
         # If the dialog does not contain the frame counts, the flow-of-control will end here.
         # Setting `frame_count` to be false as a flag. Will be used to know that the frame
