@@ -11,14 +11,14 @@ from typing import List, Tuple, Optional, Union
 import pexpect
 from pexpect import popen_spawn
 
-# File extensions supported by this script. Any file having an extension outside of these will be ignored.
-# Valid extensions can be added as needed. Adding incorrect extension will result in an error from ffmpeg.
+# File extensions supported. Any file having an extension outside of these will be ignored.
+# Extensions can be added as needed. Adding incorrect extension will result in an error from ffmpeg.
 audio_files = ['wav', 'mp3', 'm4a']
 video_files = ['mp4', 'mkv']
 # Also, these lists do not contain `flac` as a valid extension, why will anyone want
 # to generate a flac file from a flac file :p
 
-# Title of the directory that is to be ignored. Use a blank string as the value if no directory is to be ignored.
+# Name of directory that to be ignored. Blank string indicates no directory is to be ignored.
 ignore_dir: str = '.ignore'
 
 # Total number of bars (hashes by default) present in the progress bar.
@@ -42,7 +42,7 @@ units: List[str] = [
     'seconds'
 ]
 
-# A list to store amount(s) of time. Global variable to avoid having to recalculate the same value(s).
+# Amount(s) of time. Global variable to avoid having to recalculate the same value(s).
 time_units: List[int] = [
     60 * 60 * 24 * 7,  # Weeks
     60 * 60 * 24,  # Days
@@ -90,8 +90,8 @@ def get_file_list(root_dir: str, mode: str = 'recursive') -> List[str]:
         Returns
         --------
         Each file found will be appended to the global `files` list from where it can be
-        retrieved by the calling function once the execution of this function ends. And the same list will
-        also be returned by this method.
+        retrieved by the calling function once the execution of this function ends. And the same
+        list will also be returned by this method.
     """
 
     if not isdir(root_dir):
@@ -139,8 +139,8 @@ def animated_exit() -> None:
     # Vertical spacing to make sure that the animated effect is not lost in a sea of text.
     print('\n\n\n')
 
-    # Boolean used to ensure that a parallel thread asking for user input is executed only once in the
-    # infinite loop below. Without this check, a new thread will be created in every iteration of the loop.
+    # Boolean to ensure a parallel thread asking for user input is executed only once in the
+    # infinite loop. Without this check, a new thread will be created in each iteration.
     take_input: bool = False
 
     thread: Optional[Thread] = None
@@ -192,8 +192,8 @@ def print_time(seconds: int) -> str:
     global time_units, units
 
     # NOTE:
-    # Ensure that the values in `units` and `time_units` are in the same order. That is, at the same index, both the
-    # list contain values for the same time units. For example, at index 0 both list contain values for seconds.
+    # Ensure that the values in `units` and `time_units` are in same order - at the same index, both
+    # the list contain values for the same time units.
 
     readable_time: str = ''
 
@@ -214,27 +214,25 @@ def animated_progress(frame_count: int, total_frames: any, time_elapsed: int) ->
 
         Parameters
         -----------
-        frame_count: Integer containing the number of frames that have been currently processed. Should be less than
-        or equal to `total_frames` and greater than or equal to zero \n
-        total_frames: Integer containing the total number of frames. Will be used to calculate the current progress
-        and the estimated time remaining. If the frame count couldn't be fetched from ffmpeg, the value of this
-        variable should be a boolean (false preferably) \n
-        time_elapsed: Integer containing the count of seconds elapsed before reaching this frame since the processing
-        of the current file started, should be a positive integer. Used to calculate ETA \n
+        frame_count: Integer containing the number of frames that have been currently processed.
+        Should be less than or equal to `total_frames` and greater than or equal to zero \n
+        total_frames: Total number of frames. Used to calculate the current progress. Integer. \n
+        If the frame count can't be fetched, this variable should be a boolean (false preferably) \n
+        time_elapsed: Count of seconds elapsed before reaching this frame since the processing
+        of the current file started, should be a positive integer. Used to calculate ETA. Integer \n
 
         Exceptions
         -----------
-        TypeError: Thrown if `total_frames` is neither an integer nor a boolean, or if the remaining arguments are
-        not integers \n
-        ValueError: Thrown if any of the arguments is less than zero, or if value of `frame_count` is greater than
-        the value of `total_frames` \n
+        TypeError: Thrown if arguments don't match type hinting. \n
+        ValueError: Thrown if any of the arguments is less than zero, or if value of `frame_count`
+        is greater than the value of `total_frames` \n
     """
 
     # Note: While checking if the value of `total_frames` is a boolean or an integer, do NOT use
-    # `isinstance(total_frames, int)`, booleans can be implicitly converted into integers, the check will always
-    # return true. The reverse is not true, i.e. if `total_frames` contains an integer,
-    # `isinstance(total_frames, bool)` will not be true. The latter is used to check for the value of
-    # `total_frames` in this section.
+    # `isinstance(total_frames, int)`, booleans can be implicitly converted into integers, the check
+    # will always return true. The reverse is not true, i.e. if `total_frames` contains an integer,
+    # `isinstance(total_frames, bool)` will not be true. The latter is used to check for the value
+    # of `total_frames` in this section.
 
     if not isinstance(frame_count, int) or not isinstance(time_elapsed, int):
         raise Exception.TypeError('Non-integer argument supplied.')
@@ -257,10 +255,10 @@ def animated_progress(frame_count: int, total_frames: any, time_elapsed: int) ->
 
     percentage: Union[float, str] = 0.0
     if not isinstance(total_frames, bool):
-        # The progress will be shown with a progress bar, each symbol in the bar representing a fixed percentage.
+        # The progress will be shown with a progress bar, each bar representing a fixed percentage.
         percentage: float = round(float(frame_count / total_frames) * 100, 2)
 
-    # Calculating the number of seconds remaining to complete. Calculating this as the number of frames being processed
+    # Calculating the number of seconds remaining to complete- the number of frames being processed
     # in a single second, divided by the total number of frames.
     eta: int = 0
     if time_elapsed > 0:
@@ -274,10 +272,10 @@ def animated_progress(frame_count: int, total_frames: any, time_elapsed: int) ->
     progress: str = ''
     bar_size: float = float(100 / progress_bar_count)
 
-    # Note: At the end of the following block of code, the value inside `percentage` will be a string.
+    # Note: At the end of this block of code, the value inside `percentage` will be a string.
     if not isinstance(total_frames, bool):
         if len(symbol) != 0:
-            # If the string containing the symbol is not empty, generating a progress bar using the symbol.
+            # If the string is not empty, generating a progress bar using the symbol.
             hashes: int = int(percentage / bar_size)
             progress = (symbol * hashes) + \
                        (' ' * (progress_bar_count - hashes))
@@ -287,20 +285,19 @@ def animated_progress(frame_count: int, total_frames: any, time_elapsed: int) ->
             progress = '█' * completed
             progress += ((progress_bar_count - completed) * ' ')
 
-        # If the last digit after decimal in `percentage` is zero, it'll be ignored (since its a float) this will
-        # result in a changing length of the percentage which will cause problems since the previous message will be
-        # overwritten. If the length of the new message is not the same, it'll make the output messy. Handling that
-        # by ensuring that the float number consists of a length of at least 4 (including the dot), and 2 numbers
-        # after the decimal.
+        # If the last digit after decimal in `percentage` is zero, it'll be ignored this will
+        # result in variable length of string - causing problems as the previous message is to be
+        # overwritten. Variable length will make the output messy. Handling that by ensuring the
+        # float consists of a atleast 4 char (including the dot), and 2 digit precision.
         percentage = '%04.02f' % percentage
 
-        # Adding percentage symbol to the string and justifying the string to be of length '7' since the largest value
-        # allowed inside the string will be '100.00%', so following the same logic as above, except padding it with
+        # Adding percentage symbol to the string and setting the length to be '7' as the maxima
+        # allowed in the string is '100.00%', following the same logic as above - padding it with
         # spaces on the left.
         percentage = (str(percentage) + '%').rjust(7)
     else:
-        # Control reaches this part only when the total frame count is unknown. Simply replacing the percentage with
-        # the current frame count.
+        # Control reaches this part only when the total frame count is unknown. Replacing percentage
+        # with current frame count.
         percentage = f'Frames: {frame_count}'
 
     # Printing what is available in the progress bar. If the total frame count is not available
@@ -314,27 +311,28 @@ def animated_progress(frame_count: int, total_frames: any, time_elapsed: int) ->
         progress if not isinstance(total_frames, bool) else '',
 
         # Printing the remaining time if total frame count is available.
-        'Remaining: {0}'.format(print_time(eta) if not isinstance(total_frames, bool) else "¯\\_(ツ)_/¯"),
+        'Remaining: {0}'.format(
+            print_time(eta) if not isinstance(total_frames, bool) else "¯\\_(ツ)_/¯"),
 
         # Separating each part of the string with some extra space.
         sep=' ' * 4,
 
-        # Since this line is to be over-written, the cursor should not jump to the next line after the print.
+        # This line is to be over-written, the cursor should not jump to the next line.
         end=' '
     )
 
 
 def generate_flac_file(original_file: str, *, overwrite: bool = False) -> Tuple[bool, str]:
     """
-        The main method that will generate the flac file and save it in the destination directory as required.
+        Will generate the flac file and save it in the destination directory as required.
 
         Remarks
         --------
-        This function will simply take in the original file that is to be converted into a flac file, use ffmpeg in
-        the backend to generate a flac file with the same name as the original file and subsequently save the file in
-        the same directory as the original file.
+        Take in the original file that is to be converted into a flac file, use ffmpeg in the
+        backend to generate a flac file with the same name as the original and save the file in the
+        same directory as the original file.
 
-        Since this function handles the most important task of this script, this function also has the highest
+        This function handles the most important task of this script, it also has the highest
         probability of an unexpected failure/crash.
 
         *Realizes that deleting this method will leave bug-free code*
@@ -343,15 +341,13 @@ def generate_flac_file(original_file: str, *, overwrite: bool = False) -> Tuple[
 
         Exceptions
         -----------
-        OSError.FileNotFoundError: Thrown if the path supplied for the original file is invalid or if the
-        path points to a directory instead of a file.
+        OSError.FileNotFoundError: Path supplied for the original file is invalid or it points to
+        a directory instead of a file.
 
         Parameters
         -----------
-        original_file: A string containing the full file path of the original file which is to be converted to
-        a flac file \n
-        overwrite: Boolean indicating if the file is already existing, should it be overwritten or not.
-        Default --> false\n
+        original_file: Full file path of the original file which is to be converted to flac \n
+        overwrite: Boolean indicating if a file should be overwritten or not. Default --> false \n
 
         Returns
         --------
@@ -370,15 +366,15 @@ def generate_flac_file(original_file: str, *, overwrite: bool = False) -> Tuple[
 
     global process_name
 
-    # Getting the directory in which the original file is stored, creating a new path for the flac file using this
-    # location and the name of the original file, while changing the extension of the original file.
+    # Getting the directory in which the original file is stored, creating a new path for the flac
+    # file using this location.
     directory, file_name = path.split(original_file)
     flac_file = join(directory, file_name.rpartition('.')[0]) + '.flac'
 
-    # Firing a blank input at ffmpeg to get the number of frames present in the file. Doing this will result in a
-    # warning (since ffmpeg is not made to be used to get file info) -- `ffprobe` can be used as an alternative
-    # for this purpose, however not everyone will be willing to install ffprobe just for this reason, so going with
-    # this hack-y approach to get the number of frames in the video.
+    # Firing a blank input at ffmpeg to get the number of frames in the file. This will result in a
+    # warning as ffmpeg is not to be used to get file info -- `ffprobe` is an alternative
+    # for this - not everyone will be willing to install ffprobe just for this, going with this
+    # hack-y approach to get the number of frames in the video.
     info_command = f'{process_name} -i "{original_file}"'
     thread = popen_spawn.PopenSpawn(info_command)
 
@@ -387,21 +383,20 @@ def generate_flac_file(original_file: str, *, overwrite: bool = False) -> Tuple[
 
     try:
         output = output.replace('\\r', '').replace('\\n', '')
-        # Using regex to get the main string that should contain the total count for number of frames, extracting just
-        # the numbers out of the first string, and converting the numbers into integer.
+        # Using regex to get string containing number of frames, extracting just the digits out of
+        # the string - and converting into integer.
         frame_count = int(search('[0-9]+', search(r'NUMBER_OF_FRAMES-[a-zA-Z]+:(\s*)[0-9]+', output)
                                  .group()).group().strip())
     except Exception:
-        # If the dialog does not contain the frame counts, the flow-of-control will end here. Setting `frame_count`
-        # to be false as a flag. Will be used to know that the frame length of the file could not be detected.
+        # If the dialog does not contain count - flow-of-control end here. Setting `frame_count`
+        # to be false. Used to know that the frame length of the file could not be detected.
         frame_count = False
 
     # Creating a string for all the arguments that will be used along with the ffmpeg base command.
     command = f'{process_name} -i "{original_file.strip()}" -c:a flac "{flac_file.strip()}"'
 
     if overwrite:
-        # If existing files are to be overwritten, appending '-y' to ffmpeg command. This will be used if a clash
-        # occurs (i.e. a file with the same name as `flac_file` already exists).
+        # If existing files are to be overwritten, appending '-y' to ffmpeg command.
         command += ' -y'
 
     # Getting the start time before firing the process.
@@ -453,8 +448,8 @@ if __name__ == '__main__':
     # Emptying the list as an edge-case precaution.
     files = []
 
-    # Flag indicating if the interactive mode is to be used or not. True by default, will be disabled if user
-    # has passed command-line arguments.
+    # Flag indicating if the interactive mode is to be used or not. True by default - disabled if
+    # user has passed command-line arguments.
     interactive_mode: bool = True
 
     root = getcwd()
@@ -464,11 +459,10 @@ if __name__ == '__main__':
     pattern_force_write = r'^--force(="?yes"?|="?no"?)?$'
 
     if len(argv):
-        interactive_mode = False  # Disabling the interactive mode since command-line args are detected.
+        interactive_mode = False  # Disabling interactive mode.
 
-        # If an input parameter has been passed, extracting valid values from it before running the script.
-        # Skipping the first parameter since that will be the name of the script, and not really a parameter passed
-        # by the user.
+        # If an input parameter has been passed, extracting valid values before running the script.
+        # Skipping the first parameter since it is the name of the script, and not an argument.
         for argument in argv[1:]:
             if match(pattern_root, argument):
                 root = search(pattern_root, argument).groups()[0]
@@ -498,13 +492,13 @@ if __name__ == '__main__':
 
     print(f'\nCurrent root directory is: `{root}`')
 
-    # An infinite loop that will be used only if the script is going for the interactive mode, and will be broken
+    # Infinite loop - used only if the script is going for the interactive mode, and will be broken
     # from the inside.
     while interactive_mode:
         # Getting the path of the root directory from the user. This loop will be broken
         # only when the the user provides a valid input for the root directory.
-        root = input('Hit enter to continue, or enter the full path of any directory that you wish to use as '
-                     'the root directory: ').strip()
+        root = input('Hit enter to continue, or enter the full path of any directory that you wish '
+                     'to use as the root directory: ').strip()
 
         if len(root) == 0:
             # Get the working directory if the user goes ahead with the default option.
@@ -528,11 +522,11 @@ if __name__ == '__main__':
         # Asking if conflicting files are to be overwritten or not inside interactive mode.
         force_write: Union[bool, str, None] = None
         while len(files) > 0:
-            # Infinite loop as long as files are found in the root directory. Will be breaking out of this
-            # loop only when the user selects one of the available options. The check for the while loop is
-            # to ensure that the user isn't asked to choose when no file could be found in the root directory.
+            # Infinite loop as long as files are found in the root directory. Will break out of this
+            # loop when user selects one a valid option. This check is to ensure that the user
+            # isn't asked to choose when no file could be found in the root directory.
             force_write = str(input('Force overwrite any file(s) in case of a conflict (yes/no)? '
-                                    'Warning; This could result in a loss of data: ').strip()).lower()
+                                    'Warning; This could lead to loss of data: ').strip()).lower()
 
             if force_write in ['true', 'yes']:
                 force_write = True
@@ -546,14 +540,14 @@ if __name__ == '__main__':
 
         result, file = generate_flac_file(files[i], overwrite=force_write)
         if result:
-            # Once the flac file is created successfully, replacing the original progress bar with a completely filled
-            # progress bar and the time remaining as zero seconds - without this, the progress bar will remain stuck
-            # at near the end and a new one will be drawn for the next file - this might confuse some users into
-            # thinking that the process failed.
+            # Once the flac file is created successfully, replacing the progress bar with a filled
+            # one, and time remaining as zero - without this, the progress bar will remain stuck
+            # near the end and another will be drawn for the next file - this might confuse some
+            # users into thinking that the process failed.
             animated_progress(100, 100, 0)
 
             # Finally printing the success message.
             print(f'\n\tGenerated file "{file}" successfully')
 
-    # Displaying a nice little disappearing animation while waiting for user input before killing the script.
+    # Displaying a nice little disappearing animation.
     animated_exit()
